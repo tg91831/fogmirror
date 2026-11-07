@@ -8,7 +8,7 @@
   * { margin: 0; padding: 0; box-sizing: border-box; }
   body { background: #000; overflow: hidden; width: 100vw; height: 100vh; cursor: none; }
   #container { position: relative; width: 100vw; height: 100vh; }
-  video { position: absolute; width: 100%; height: 100%; object-fit: cover; transform: scaleX(-1); opacity: 0; pointer-events: none; }
+  #video { position: absolute; width: 100%; height: 100%; object-fit: cover; transform: scaleX(-1); opacity: 0; pointer-events: none; }
   canvas { position: absolute; top: 0; left: 0; width: 100%; height: 100%; }
   #cameraCanvas { z-index: 1; }
   #maskCanvas   { z-index: 0; display: none; }
@@ -80,6 +80,7 @@
     opacity: 0; transition: opacity 0.15s;
   }
   .photo-thumb:hover .save-btn { opacity: 1; }
+ @media (pointer: coarse) { .save-btn { opacity: 1; background: rgba(0,0,0,0.35); } }
   @keyframes thumbIn { from { opacity:0; transform:scale(0.8) translateY(10px); } to { opacity:1; transform:scale(1); } }
 
   #flash { position: fixed; inset: 0; z-index: 200; background: white; opacity: 0; pointer-events: none; }
@@ -466,7 +467,8 @@ function startRecording() {
     wrap.className = 'photo-thumb';
     const v = document.createElement('video');
     v.src = url; v.muted = true; v.loop = true; v.autoplay = true; v.playsInline = true;
-    v.style.height = '100%'; v.style.display = 'block';
+   v.style.height = '100%'; v.style.width = '100%'; v.style.objectFit = 'cover'; v.style.display = 'block';
+wrap.style.width = '110px';
     const btn = document.createElement('div');
     btn.className = 'save-btn';
     btn.textContent = '↓ save video';
@@ -476,6 +478,15 @@ function startRecording() {
       a.href = url; a.download = `breath-mirror-${Date.now()}.${ext}`; a.click();
     });
     wrap.appendChild(v); wrap.appendChild(btn);
+   const old = document.getElementById('saveNowBtn'); if (old) old.remove();
+const saveNow = document.createElement('button');
+saveNow.id = 'saveNowBtn';
+saveNow.textContent = '↓ save video';
+saveNow.addEventListener('click', () => {
+  const a = document.createElement('a');
+  a.href = url; a.download = `breath-mirror-${Date.now()}.${ext}`; a.click();
+});
+document.getElementById('btnGroup').appendChild(saveNow);
     photoStrip.appendChild(wrap);
     wrap.scrollIntoView({ behavior: 'smooth', inline: 'end' });
   };
