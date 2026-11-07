@@ -128,6 +128,7 @@ const offCtx    = offscreen.getContext('2d');
 
 let W = 0, H = 0, fogReady = false;
  const IS_TOUCH = matchMedia('(pointer: coarse)').matches; // true on phones/tablets
+ let micStream = null; // shared so the recorder can use the mic too
 
 // ── Resize ────────────────────────────────────────────────────────────
 function resize() {
@@ -377,6 +378,7 @@ async function startCamera() {
 async function startMic() {
   try {
     const ms = await navigator.mediaDevices.getUserMedia({ audio: true });
+   micStream = ms;
     const ac = new AudioContext();
     const src = ac.createMediaStreamSource(ms);
     const hp = ac.createBiquadFilter(); hp.type = 'highpass'; hp.frequency.value = 800;
@@ -433,6 +435,65 @@ if (IS_TOUCH) {
   camBtn.addEventListener('click', () => { if (!countingDown) startCountdown(); });
   document.getElementById('btnGroup').appendChild(camBtn);
 }
+ // ── Video recording ───────────────────────────────────────────────────
+let recorder = null, recChunks = [], recLoop = null;
+
+function startRecording() {
+  const recCanvas = document.createElement('canvas');
+  recCanvas.width = W; recCanvas.height = H;
+  const rCtx = recCanvas.getContext('2d');
+  (function drawRec() {
+    rCtx.drawImage(cameraCanvas, 0, 0);
+    rCtx.drawImage(blurCanvas, 0, 0);
+    recLoop = requestAnimationFrame(drawRec);
+  })();
+
+  const stream = recCanvas.captureStream(30);
+  if (micStream) micStream.getAudioTracks().forEach(t => stream.addTrack(t));
+
+  const mime = ['video/mp4', 'video/webm;codecs=vp9,opus', 'video/webm']
+    .find(m => MediaRecorder.isTypeSupported(m)) || '';
+  recorder = new MediaRecorder(stream, mime ? { mimeType: mime } : undefined);
+  recChunks = [];
+  recorder.ondataavailable = e => { if (e.data.size) recChunks.push(e.data); };
+  recorder.onstop = () => {
+    cancelAnimationFrame(recLoop);
+    const type = recorder.mimeType || 'video/webm';
+    const url = URL.createObjectURL(new Blob(recChunks, { type }));
+    const ext = type.includes('mp4') ? 'mp4' : 'webm';
+
+    const wrap = document.createElement('div');
+    wrap.className = 'photo-thumb';
+    const v = document.createElement('video');
+    v.src = url; v.muted = true; v.loop = true; v.autoplay = true; v.playsInline = true;
+    v.style.height = '100%'; v.style.display = 'block';
+    const btn = document.createElement('div');
+    btn.className = 'save-btn';
+    btn.textContent = '↓ save video';
+    btn.addEventListener('click', e => {
+      e.stopPropagation();
+      const a = document.createElement('a');
+      a.href = url; a.download = `breath-mirror-${Date.now()}.${ext}`; a.click();
+    });
+    wrap.appendChild(v); wrap.appendChild(btn);
+    photoStrip.appendChild(wrap);
+    wrap.scrollIntoView({ behavior: 'smooth', inline: 'end' });
+  };
+  recorder.start();
+}
+
+const recBtn = document.createElement('button');
+recBtn.textContent = '● record';
+recBtn.addEventListener('click', () => {
+  if (recorder && recorder.state === 'recording') {
+    recorder.stop();
+    recBtn.textContent = '● record';
+  } else {
+    startRecording();
+    recBtn.textContent = '■ stop';
+  }
+});
+document.getElementById('btnGroup').appendChild(recBtn);
 startCamera(); startMic();
 </script>
 </body>
