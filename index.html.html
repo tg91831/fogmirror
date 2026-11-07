@@ -436,29 +436,34 @@ if (IS_TOUCH) {
   camBtn.addEventListener('click', () => { if (!countingDown) startCountdown(); });
   document.getElementById('btnGroup').appendChild(camBtn);
 }
- // ── Video recording ───────────────────────────────────────────────────
+// ── Video recording ───────────────────────────────────────────────────
 let recorder = null, recChunks = [], recLoop = null;
 
 function startRecording() {
+  const scale = Math.min(1, 720 / Math.max(W, H));
   const recCanvas = document.createElement('canvas');
-  recCanvas.width = W; recCanvas.height = H;
+  recCanvas.width  = Math.round(W * scale);
+  recCanvas.height = Math.round(H * scale);
+  recCanvas.style.cssText = 'position:fixed;left:0;top:0;width:2px;height:2px;opacity:0.01;pointer-events:none;z-index:-1';
+  document.body.appendChild(recCanvas);
   const rCtx = recCanvas.getContext('2d');
-  (function drawRec() {
-    rCtx.drawImage(cameraCanvas, 0, 0);
-    rCtx.drawImage(blurCanvas, 0, 0);
-    recLoop = requestAnimationFrame(drawRec);
-  })();
+  recLoop = setInterval(() => {
+    rCtx.drawImage(cameraCanvas, 0, 0, recCanvas.width, recCanvas.height);
+    rCtx.drawImage(blurCanvas,   0, 0, recCanvas.width, recCanvas.height);
+  }, 1000 / 24);
 
-  const stream = recCanvas.captureStream(30);
+  const stream = recCanvas.captureStream(24);
   if (micStream) micStream.getAudioTracks().forEach(t => stream.addTrack(t));
 
   const mime = ['video/mp4', 'video/webm;codecs=vp9,opus', 'video/webm']
     .find(m => MediaRecorder.isTypeSupported(m)) || '';
-  recorder = new MediaRecorder(stream, mime ? { mimeType: mime } : undefined);
+  recorder = new MediaRecorder(stream, mime
+    ? { mimeType: mime, videoBitsPerSecond: 2500000 }
+    : { videoBitsPerSecond: 2500000 });
   recChunks = [];
   recorder.ondataavailable = e => { if (e.data.size) recChunks.push(e.data); };
   recorder.onstop = () => {
-    cancelAnimationFrame(recLoop);
+    clearInterval(recLoop); recCanvas.remove();
     const type = recorder.mimeType || 'video/webm';
     const url = URL.createObjectURL(new Blob(recChunks, { type }));
     const ext = type.includes('mp4') ? 'mp4' : 'webm';
@@ -467,8 +472,8 @@ function startRecording() {
     wrap.className = 'photo-thumb';
     const v = document.createElement('video');
     v.src = url; v.muted = true; v.loop = true; v.autoplay = true; v.playsInline = true;
-   v.style.height = '100%'; v.style.width = '100%'; v.style.objectFit = 'cover'; v.style.display = 'block';
-wrap.style.width = '110px';
+    v.style.height = '100%'; v.style.width = '100%'; v.style.objectFit = 'cover'; v.style.display = 'block';
+    wrap.style.width = '110px';
     const btn = document.createElement('div');
     btn.className = 'save-btn';
     btn.textContent = '↓ save video';
@@ -478,15 +483,17 @@ wrap.style.width = '110px';
       a.href = url; a.download = `breath-mirror-${Date.now()}.${ext}`; a.click();
     });
     wrap.appendChild(v); wrap.appendChild(btn);
-   const old = document.getElementById('saveNowBtn'); if (old) old.remove();
-const saveNow = document.createElement('button');
-saveNow.id = 'saveNowBtn';
-saveNow.textContent = '↓ save video';
-saveNow.addEventListener('click', () => {
-  const a = document.createElement('a');
-  a.href = url; a.download = `breath-mirror-${Date.now()}.${ext}`; a.click();
-});
-document.getElementById('btnGroup').appendChild(saveNow);
+
+    const old = document.getElementById('saveNowBtn'); if (old) old.remove();
+    const saveNow = document.createElement('button');
+    saveNow.id = 'saveNowBtn';
+    saveNow.textContent = '↓ save video';
+    saveNow.addEventListener('click', () => {
+      const a = document.createElement('a');
+      a.href = url; a.download = `breath-mirror-${Date.now()}.${ext}`; a.click();
+    });
+    document.getElementById('btnGroup').appendChild(saveNow);
+
     photoStrip.appendChild(wrap);
     wrap.scrollIntoView({ behavior: 'smooth', inline: 'end' });
   };
